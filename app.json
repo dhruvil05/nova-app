@@ -1,18 +1,21 @@
 {
   "expo": {
-    "name": "nova",
+    "name": "Nova",
     "slug": "nova",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "nova",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0D0D12",
     "ios": {
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.personal.nova",
+      "blockedPermissions": ["android.permission.READ_MEDIA_VISUAL_USER_SELECTED"],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0D0D12",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -28,9 +31,20 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#0D0D12",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-media-library",
+        {
+          "granularPermissions": ["audio"],
+          "isAccessMediaLocationEnabled": false,
+          "photosPermission": false,
+          "savePhotosPermission": false
         }
       ]
     ],
