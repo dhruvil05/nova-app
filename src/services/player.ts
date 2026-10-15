@@ -79,6 +79,10 @@ export function resume(): void {
   TrackPlayer.play();
 }
 
+export function isPlaying(): boolean {
+  return ready ? TrackPlayer.isPlaying() : false;
+}
+
 export function togglePlay(): void {
   if (TrackPlayer.isPlaying()) TrackPlayer.pause();
   else TrackPlayer.play();

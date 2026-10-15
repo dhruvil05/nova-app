@@ -124,6 +124,20 @@ const ICONS = {
       <Path d="M5 21h14" />
     </>
   ),
+  send: (
+    <>
+      <Path d="M12 19V5" />
+      <Path d="M5 12l7-7 7 7" />
+    </>
+  ),
+  history: (
+    <>
+      <Path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <Path d="M3 3v5h5" />
+      <Path d="M12 7v5l3 2" />
+    </>
+  ),
+  stop: <Rect x={6} y={6} width={12} height={12} rx={2} fill="currentColor" stroke="none" />,
   // Filled glyphs: drawn with the icon color via currentColor.
   play: <Path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z" fill="currentColor" stroke="none" />,
   pause: (

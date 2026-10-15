@@ -1,14 +1,16 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, KeyboardAvoidingView, ScrollView, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native';
 
+import { MODELS, resolveModel, type ModelId } from '@/ai/models';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
-import { useSettingsRepo } from '@/db/hooks';
+import { useConversationsRepo, useSettingsRepo } from '@/db/hooks';
 import { clearApiKey, getApiKey, maskApiKey, setApiKey } from '@/services/secrets';
+import { useChatSession } from '@/store/chatSession';
 import { usePrivacy } from '@/store/privacy';
 import { makeStyles, useTheme } from '@/theme';
 
@@ -23,16 +25,18 @@ export default function SettingsScreen() {
   const settings = useSettingsRepo();
   const unlocked = usePrivacy((s) => s.unlocked);
   const lock = usePrivacy((s) => s.lock);
+  const conversations = useConversationsRepo();
+  const setConversation = useChatSession((s) => s.setConversation);
 
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [keyDraft, setKeyDraft] = useState('');
   const [editingKey, setEditingKey] = useState(false);
   const [savingKey, setSavingKey] = useState(false);
-  const [model, setModel] = useState('');
+  const [model, setModel] = useState<ModelId>(resolveModel(null));
 
   useEffect(() => {
     getApiKey().then(setSavedKey);
-    settings.get('ai.model').then((m) => setModel(m ?? ''));
+    settings.get('ai.model').then((m) => setModel(resolveModel(m)));
   }, [settings]);
 
   async function saveKey() {
@@ -63,10 +67,24 @@ export default function SettingsScreen() {
     ]);
   }
 
-  async function saveModel() {
-    const value = model.trim();
-    if (value) await settings.set('ai.model', value);
-    else await settings.remove('ai.model');
+  async function chooseModel(id: ModelId) {
+    setModel(id);
+    await settings.set('ai.model', id);
+  }
+
+  function clearHistory() {
+    Alert.alert('Clear all chats?', 'Every conversation with Nova will be deleted. Notes and files Nova made stay.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: async () => {
+          await conversations.clearAll();
+          setConversation(null);
+          Alert.alert('Chats cleared');
+        },
+      },
+    ]);
   }
 
   const showKeyInput = editingKey || !savedKey;
@@ -85,11 +103,11 @@ export default function SettingsScreen() {
           <Section title="AI">
             <View style={styles.row}>
               <View style={styles.rowText}>
-                <AppText>API key</AppText>
+                <AppText>Claude API key</AppText>
                 <AppText variant="caption" color="textMuted">
                   {savedKey
                     ? `Kept in secure storage · ${maskApiKey(savedKey)}`
-                    : 'Needed for chat (Phase 4). Stored only on this phone.'}
+                    : 'From console.anthropic.com. Stored only on this phone.'}
                 </AppText>
               </View>
               {savedKey && !editingKey ? (
@@ -142,24 +160,35 @@ export default function SettingsScreen() {
             <View style={styles.rowText}>
               <AppText>Model</AppText>
               <AppText variant="caption" color="textMuted">
-                Model ID from your AI provider. Leave empty to use the default.
+                Changing it mid-chat works; the new model continues the conversation.
               </AppText>
             </View>
-            <TextInput
-              value={model}
-              onChangeText={setModel}
-              onEndEditing={saveModel}
-              placeholder="Default"
-              placeholderTextColor={theme.colors.placeholder}
-              accessibilityLabel="Model"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.input}
-              selectionColor={theme.colors.accent}
-            />
+            <View accessibilityRole="radiogroup" style={styles.options}>
+              {MODELS.map((m) => {
+                const selected = m.id === model;
+                return (
+                  <Pressable
+                    key={m.id}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    onPress={() => chooseModel(m.id)}
+                    style={[styles.option, selected && styles.optionSelected]}>
+                    <View style={[styles.radio, selected && styles.radioSelected]}>
+                      {selected ? <View style={styles.radioDot} /> : null}
+                    </View>
+                    <View style={styles.rowText}>
+                      <AppText variant="bodyMedium">{m.label}</AppText>
+                      <AppText variant="caption" color="textMuted">
+                        {m.description}
+                      </AppText>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           </Section>
 
-          <Section title="Privacy">
+          <Section title="Privacy & data">
             <View style={styles.row}>
               <View style={styles.rowText}>
                 <AppText>Private notes</AppText>
@@ -171,12 +200,21 @@ export default function SettingsScreen() {
               </View>
               {unlocked ? <Button label="Lock now" variant="secondary" compact onPress={lock} /> : null}
             </View>
+            <View style={styles.divider} />
+            <View style={styles.row}>
+              <View style={styles.rowText}>
+                <AppText>Conversation history</AppText>
+                <AppText variant="caption" color="textMuted">
+                  Stored only on this phone.
+                </AppText>
+              </View>
+              <Button label="Clear" variant="secondary" compact onPress={clearHistory} />
+            </View>
           </Section>
 
           <Section title="Coming in later phases">
             <AppText variant="small" color="textMuted">
-              Voice language and speed (Phase 5), “Hey Nova” wake word and battery setup (Phase 6),
-              clearing chat history (Phase 4).
+              Voice chat, language and speed (Phase 5); “Hey Nova” wake word and battery setup (Phase 6).
             </AppText>
           </Section>
 
@@ -236,5 +274,27 @@ const useStyles = makeStyles((t) => ({
     ...t.typography.body,
   },
   divider: { height: 1, backgroundColor: t.colors.border },
+  options: { gap: t.spacing.sm },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing.md,
+    padding: t.spacing.md,
+    borderRadius: t.radius.lg,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+  },
+  optionSelected: { borderColor: t.colors.accent, backgroundColor: t.colors.accentSoft },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: t.colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioSelected: { borderColor: t.colors.accent },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: t.colors.accent },
   version: { textAlign: 'center' },
 }));
