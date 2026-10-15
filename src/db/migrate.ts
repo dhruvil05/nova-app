@@ -76,6 +76,13 @@ const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   );
   `,
+
+  // v2: why extraction failed (e.g. a scanned PDF needs OCR), and page counts for PDFs
+  `
+  ALTER TABLE files ADD COLUMN extraction_error TEXT;
+  ALTER TABLE files ADD COLUMN page_count INTEGER;
+  CREATE INDEX IF NOT EXISTS idx_files_created ON files(created_at DESC);
+  `,
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.length;

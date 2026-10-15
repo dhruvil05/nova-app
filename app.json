@@ -13,7 +13,9 @@
     },
     "android": {
       "package": "com.personal.nova",
-      "blockedPermissions": ["android.permission.READ_MEDIA_VISUAL_USER_SELECTED"],
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0D0D12",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -41,12 +43,15 @@
       [
         "expo-media-library",
         {
-          "granularPermissions": ["audio"],
+          "granularPermissions": [
+            "audio"
+          ],
           "isAccessMediaLocationEnabled": false,
           "photosPermission": false,
           "savePhotosPermission": false
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

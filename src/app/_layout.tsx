@@ -84,6 +84,7 @@ function AppShell() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="note/[id]" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="file/[id]" />
         <Stack.Screen name="player" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
     </NavigationThemeProvider>

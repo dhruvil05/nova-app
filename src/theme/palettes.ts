@@ -61,6 +61,9 @@ export type ColorTokens = {
 
   /** Placeholder album-art colors; each song picks one from its album/artist name. */
   artwork: { background: string; foreground: string }[];
+
+  /** File-type tiles in the Files tab */
+  fileTypes: Record<'pdf' | 'docx' | 'txt' | 'other', { background: string; foreground: string }>;
 };
 
 /** Names of the single-color tokens (everything except lists like `artwork`). */
@@ -122,4 +125,11 @@ export const novaDark: ColorTokens = {
     { background: '#A8842B', foreground: '#FFF4D9' },
     { background: '#3A3F4C', foreground: '#D6DAE3' },
   ],
+
+  fileTypes: {
+    pdf: { background: '#3A1A1D', foreground: '#FF9A9A' },
+    docx: { background: '#14233A', foreground: '#8AB8FF' },
+    txt: { background: '#1E2A22', foreground: '#8FE0B0' },
+    other: { background: '#26262F', foreground: '#C9C8D4' },
+  },
 };
