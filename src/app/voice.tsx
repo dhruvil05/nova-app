@@ -1,7 +1,8 @@
-import { router } from 'expo-router';
+import WakeWord from '@modules/wake-word';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { useEffect, useReducer, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, View } from 'react-native';
+import { Animated, BackHandler, Easing, Pressable, View } from 'react-native';
 
 import { useChatStore } from '@/ai/chatStore';
 import { describeTool } from '@/ai/transcript';
@@ -17,6 +18,7 @@ import * as player from '@/services/player';
 import { makeStyles, useTheme } from '@/theme';
 import { loadVoicePrefs, type VoicePrefs } from '@/voice/prefs';
 import {
+  GOOGLE_RECOGNIZER,
   SILENCE_TIMEOUT_MS,
   cancelListening,
   describeSpeechError,
@@ -30,6 +32,11 @@ import { VOICE_LANGUAGES, isStopCommand, speechLanguageFor, toSpeakable } from '
 import { speak, stopSpeaking } from '@/voice/tts';
 
 const RESTART_DELAY_MS = 150;
+/** After a "Hey Nova" conversation ends, wait this long before going back. */
+const WAKE_CLOSE_DELAY_MS = 1200;
+
+/** Xiaomi may route speech recognition to its own service; ask for Google's. */
+const RECOGNIZER_PACKAGE = /xiaomi|redmi|poco/i.test(WakeWord?.getManufacturer() ?? '') ? GOOGLE_RECOGNIZER : undefined;
 
 function close() {
   if (router.canGoBack()) router.back();
@@ -39,6 +46,8 @@ function close() {
 /** Voice conversation with Nova (spec 9.1): one question, or hands-free back-and-forth. */
 export default function VoiceScreen() {
   useBindChat();
+  // Opened by "Hey Nova" (possibly over the lock screen) rather than the mic button.
+  const isWake = useLocalSearchParams<{ wake?: string }>().wake === '1';
   const theme = useTheme();
   const styles = useStyles();
   const settings = useSettingsRepo();
@@ -46,12 +55,16 @@ export default function VoiceScreen() {
   const [state, dispatch] = useReducer(voiceReducer, initialVoiceState);
   const [prefs, setPrefs] = useState<VoicePrefs | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
   const liveTools = useChatStore((s) => s.liveTools);
   const confirm = useChatStore((s) => s.confirm);
 
   const stateRef = useRef(state);
   const prefsRef = useRef<VoicePrefs | null>(null);
   const listenStartedAt = useRef(0);
+  /** The phone was locked when the conversation began: safe tools only, and hide afterwards. */
+  const lockedRef = useRef(false);
+  const startedRef = useRef(false);
   useEffect(() => {
     stateRef.current = state;
     prefsRef.current = prefs;
@@ -86,8 +99,14 @@ export default function VoiceScreen() {
         return;
       }
       if (cancelled) return;
+      lockedRef.current = isWake && (WakeWord?.isDeviceLocked() ?? false);
+      setLocked(lockedRef.current);
+      // The wake-word service and speech recognition can't share the microphone.
+      if (!isWake) WakeWord?.pauseListening();
       player.duck();
-      dispatch({ type: 'START', handsFree: loaded.handsFree });
+      startedRef.current = true;
+      // A "Hey Nova" conversation is hands-free; it ends on "stop" or silence.
+      dispatch({ type: 'START', handsFree: isWake || loaded.handsFree });
     })();
     return () => {
       cancelled = true;
@@ -95,14 +114,44 @@ export default function VoiceScreen() {
       stopSpeaking();
       if (stateRef.current.phase === 'thinking') useChatStore.getState().stop();
       player.unduck();
+      // Never leave Nova showing over the lock screen, and go back to listening.
+      WakeWord?.setShowWhenLocked(false);
+      WakeWord?.resumeListening();
     };
-  }, [settings]);
+  }, [settings, isWake]);
+
+  /** Leaves the voice screen; after a locked "Hey Nova" chat, back behind the lock screen. */
+  function leave() {
+    if (lockedRef.current) {
+      WakeWord?.setShowWhenLocked(false);
+      WakeWord?.moveToBack();
+    }
+    close();
+  }
+
+  // A "Hey Nova" conversation closes itself when it ends.
+  useEffect(() => {
+    if (!isWake || state.phase !== 'idle' || !startedRef.current || fatal) return;
+    const timer = setTimeout(leave, WAKE_CLOSE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [isWake, state.phase, fatal]);
+
+  // While locked, the back button ends the conversation instead of revealing the app.
+  useEffect(() => {
+    if (!isWake) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      stopAll();
+      leave();
+      return true;
+    });
+    return () => sub.remove();
+  }, [isWake]);
 
   // Listening: start the microphone each time a new listening round begins.
   useEffect(() => {
     if (state.phase !== 'listening' || !prefsRef.current) return;
     listenStartedAt.current = Date.now();
-    startListening(prefsRef.current.language);
+    startListening(prefsRef.current.language, { servicePackage: RECOGNIZER_PACKAGE });
   }, [state.phase, state.listenId]);
 
   // Thinking: send what was heard to Nova (same conversation as the chat tab).
@@ -111,7 +160,7 @@ export default function VoiceScreen() {
     let cancelled = false;
     useChatStore
       .getState()
-      .send(state.heard, { voice: true })
+      .send(state.heard, { voice: true, locked: lockedRef.current })
       .then((res) => {
         if (cancelled) return;
         const notice = useChatStore.getState().notice?.text;
@@ -168,7 +217,7 @@ export default function VoiceScreen() {
       if (Date.now() - listenStartedAt.current < SILENCE_TIMEOUT_MS && prefsRef.current) {
         const language = prefsRef.current.language;
         setTimeout(() => {
-          if (stateRef.current.phase === 'listening') startListening(language);
+          if (stateRef.current.phase === 'listening') startListening(language, { servicePackage: RECOGNIZER_PACKAGE });
         }, RESTART_DELAY_MS);
         return;
       }
@@ -216,7 +265,7 @@ export default function VoiceScreen() {
   return (
     <Screen bottomInset style={styles.screen}>
       <View style={styles.header}>
-        <IconButton icon="chevronDown" label="Close voice" onPress={close} />
+        <IconButton icon="chevronDown" label="Close voice" onPress={leave} />
         <AppText variant="bodyStrong" accessibilityRole="header">
           {state.handsFree ? 'Hands-free' : 'Voice'}
         </AppText>
@@ -274,9 +323,13 @@ export default function VoiceScreen() {
       </View>
 
       <View style={styles.controls}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Switch to typing" onPress={close} style={styles.sideButton}>
-          <Icon name="edit" size={22} color={theme.colors.textSecondary} />
-        </Pressable>
+        {locked ? (
+          <View style={styles.sideSpacer} />
+        ) : (
+          <Pressable accessibilityRole="button" accessibilityLabel="Switch to typing" onPress={leave} style={styles.sideButton}>
+            <Icon name="edit" size={22} color={theme.colors.textSecondary} />
+          </Pressable>
+        )}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={mainLabel}
@@ -290,7 +343,7 @@ export default function VoiceScreen() {
           accessibilityLabel="End voice conversation"
           onPress={() => {
             stopAll();
-            close();
+            leave();
           }}
           style={[styles.sideButton, styles.endButton]}>
           <Icon name="plus" size={24} strokeWidth={2} color={theme.colors.danger} />
@@ -430,6 +483,7 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sideSpacer: { width: 56, height: 56 },
   endButton: { backgroundColor: t.colors.dangerSoft, borderColor: t.colors.dangerSoft, transform: [{ rotate: '45deg' }] },
   mainButton: {
     width: 84,

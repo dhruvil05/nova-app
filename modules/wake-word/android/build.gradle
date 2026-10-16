@@ -1,0 +1,25 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.wakeword'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.wakeword"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+    consumerProguardFiles 'proguard-rules.pro'
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // Vosk offline speech recognition (Apache-2.0). Pulls in JNA as an AAR.
+  implementation 'com.alphacephei:vosk-android:0.3.75'
+  implementation 'androidx.core:core:1.13.1'
+}

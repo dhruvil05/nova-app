@@ -113,6 +113,15 @@ describe('note tools', () => {
     expect(await notes.get(note.id)).not.toBeNull();
   });
 
+  it('update_note is refused while locked, create_note still works', async () => {
+    const { ctx, notes } = await setup({ locked: true });
+    const note = await notes.create({ title: 'Plan', body: 'original' });
+    const out = await executeTool('update_note', { id: note.id, body: 'changed' }, ctx);
+    expect(out.isError).toBe(true);
+    expect((await notes.get(note.id))?.body).toBe('original');
+    expect((await executeTool('create_note', { title: 'Bill', body: 'Due 15th' }, ctx)).isError).toBe(false);
+  });
+
   it('delete_note is refused while locked', async () => {
     const { ctx, notes } = await setup({ locked: true });
     const note = await notes.create({ title: 'Old', body: 'x' });

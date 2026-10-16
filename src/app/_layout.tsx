@@ -12,6 +12,7 @@ import { migrate } from '@/db/migrate';
 import { setupPlayer } from '@/services/player';
 import { usePrivacy } from '@/store/privacy';
 import { ThemeProvider, fonts, useTheme } from '@/theme';
+import { WakeWordListener } from '@/voice/WakeWordListener';
 
 SplashScreen.preventAutoHideAsync();
 // The player must exist before any screen reads playback state, and Android
@@ -87,8 +88,11 @@ function AppShell() {
         <Stack.Screen name="file/[id]" />
         <Stack.Screen name="chats" />
         <Stack.Screen name="voice" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="wake-setup" />
+        <Stack.Screen name="wake-resume" />
         <Stack.Screen name="player" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
+      <WakeWordListener />
     </NavigationThemeProvider>
   );
 }

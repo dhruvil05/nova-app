@@ -96,6 +96,8 @@ const handlers: Record<string, Handler> = {
 
   async update_note({ id, title, body }, ctx) {
     if (title === undefined && body === undefined) return fail('Give a new title or body');
+    // Locked mode allows only safe actions (spec 11); editing overwrites the user's text.
+    if (ctx.locked) return fail('Editing notes needs the phone unlocked. Offer to create a new note instead.');
     const note = await ctx.notes.update(id, { title, body });
     if (!note) return fail(`No note with id ${id}`);
     ctx.onChange?.('notes');

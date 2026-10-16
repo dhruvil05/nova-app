@@ -10,6 +10,7 @@ import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { VoiceSettings } from '@/components/settings/VoiceSettings';
+import { WakeWordSettings } from '@/components/settings/WakeWordSettings';
 import { useConversationsRepo, useSettingsRepo } from '@/db/hooks';
 import { clearApiKey, getApiKey, maskApiKey, setApiKey } from '@/services/secrets';
 import { usePrivacy } from '@/store/privacy';
@@ -192,6 +193,10 @@ export default function SettingsScreen() {
             <VoiceSettings />
           </Section>
 
+          <Section title="“Hey Nova”">
+            <WakeWordSettings />
+          </Section>
+
           <Section title="Privacy & data">
             <View style={styles.row}>
               <View style={styles.rowText}>
@@ -216,11 +221,6 @@ export default function SettingsScreen() {
             </View>
           </Section>
 
-          <Section title="Coming in later phases">
-            <AppText variant="small" color="textMuted">
-              “Hey Nova” wake word with the screen locked, and battery setup (Phase 6).
-            </AppText>
-          </Section>
 
           <AppText variant="caption" color="textFaint" style={styles.version}>
             Nova {Constants.expoConfig?.version ?? ''}

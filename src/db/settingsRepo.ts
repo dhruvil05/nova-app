@@ -10,6 +10,7 @@ export type SettingKey =
   | 'voice.rate'
   | 'voice.ttsVoice'
   | 'voice.handsFree'
+  | 'wake.sensitivity'
   | 'theme'
   | 'music.lastScanAt';
 

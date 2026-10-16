@@ -48,7 +48,8 @@ type ChatState = {
 
   bind(deps: ChatDeps): void;
   open(conversationId: number | null): Promise<void>;
-  send(text: string, opts?: { voice?: boolean }): Promise<SendResult>;
+  /** voice: keep replies short; locked: phone is locked, so only safe tools may act */
+  send(text: string, opts?: { voice?: boolean; locked?: boolean }): Promise<SendResult>;
   stop(): void;
   answerConfirm(ok: boolean): void;
   dismissNotice(): void;
@@ -157,6 +158,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       notes: deps.notes,
       files: deps.files,
       tracks: deps.tracks,
+      locked: opts?.locked,
       confirm: (req) =>
         new Promise<boolean>((resolve) => {
           confirmResolver = resolve;

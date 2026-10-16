@@ -24,9 +24,16 @@ export async function ensureMicPermission(): Promise<boolean> {
   return res.granted;
 }
 
-export function startListening(language: VoiceLanguage): void {
+/**
+ * On Xiaomi phones the default recogniser may be Xiaomi's own service; Google's
+ * handles Hindi/Gujarati and works while a microphone service runs.
+ */
+export const GOOGLE_RECOGNIZER = 'com.google.android.googlequicksearchbox';
+
+export function startListening(language: VoiceLanguage, opts?: { servicePackage?: string }): void {
   ExpoSpeechRecognitionModule.start({
     lang: language,
+    androidRecognitionServicePackage: opts?.servicePackage,
     interimResults: true,
     continuous: false,
     maxAlternatives: 1,
