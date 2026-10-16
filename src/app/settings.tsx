@@ -3,14 +3,15 @@ import { router } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native';
 
+import { useChatStore } from '@/ai/chatStore';
 import { MODELS, resolveModel, type ModelId } from '@/ai/models';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
+import { VoiceSettings } from '@/components/settings/VoiceSettings';
 import { useConversationsRepo, useSettingsRepo } from '@/db/hooks';
 import { clearApiKey, getApiKey, maskApiKey, setApiKey } from '@/services/secrets';
-import { useChatSession } from '@/store/chatSession';
 import { usePrivacy } from '@/store/privacy';
 import { makeStyles, useTheme } from '@/theme';
 
@@ -26,7 +27,6 @@ export default function SettingsScreen() {
   const unlocked = usePrivacy((s) => s.unlocked);
   const lock = usePrivacy((s) => s.lock);
   const conversations = useConversationsRepo();
-  const setConversation = useChatSession((s) => s.setConversation);
 
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [keyDraft, setKeyDraft] = useState('');
@@ -80,7 +80,7 @@ export default function SettingsScreen() {
         style: 'destructive',
         onPress: async () => {
           await conversations.clearAll();
-          setConversation(null);
+          await useChatStore.getState().open(null);
           Alert.alert('Chats cleared');
         },
       },
@@ -188,6 +188,10 @@ export default function SettingsScreen() {
             </View>
           </Section>
 
+          <Section title="Voice">
+            <VoiceSettings />
+          </Section>
+
           <Section title="Privacy & data">
             <View style={styles.row}>
               <View style={styles.rowText}>
@@ -214,7 +218,7 @@ export default function SettingsScreen() {
 
           <Section title="Coming in later phases">
             <AppText variant="small" color="textMuted">
-              Voice chat, language and speed (Phase 5); “Hey Nova” wake word and battery setup (Phase 6).
+              “Hey Nova” wake word with the screen locked, and battery setup (Phase 6).
             </AppText>
           </Section>
 

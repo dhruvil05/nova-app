@@ -151,7 +151,7 @@ export default function AiScreen() {
           </Pressable>
         ) : null}
 
-        <Composer busy={chat.busy} onSend={chat.send} onStop={chat.stop} />
+        <Composer busy={chat.busy} onSend={chat.send} onStop={chat.stop} onMic={() => router.push('/voice')} />
       </KeyboardAvoidingView>
 
       {chat.confirm ? (

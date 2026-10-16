@@ -4,7 +4,14 @@ import type { Db } from './types';
  * Non-secret key/value settings. Secrets (the API key) go in secure storage
  * via src/services/secrets.ts, never in this table.
  */
-export type SettingKey = 'ai.model' | 'voice.language' | 'theme' | 'music.lastScanAt';
+export type SettingKey =
+  | 'ai.model'
+  | 'voice.language'
+  | 'voice.rate'
+  | 'voice.ttsVoice'
+  | 'voice.handsFree'
+  | 'theme'
+  | 'music.lastScanAt';
 
 export function createSettingsRepo(db: Db) {
   return {

@@ -2,6 +2,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, FlatList, Pressable, View } from 'react-native';
 
+import { useChatStore } from '@/ai/chatStore';
+import { useBindChat } from '@/ai/useChat';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
@@ -9,7 +11,6 @@ import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import type { Conversation } from '@/db/conversationsRepo';
 import { useConversationsRepo } from '@/db/hooks';
-import { useChatSession } from '@/store/chatSession';
 import { makeStyles } from '@/theme';
 import { formatListDate } from '@/utils/formatDate';
 
@@ -22,8 +23,9 @@ function goBack() {
 export default function ChatsScreen() {
   const styles = useStyles();
   const repo = useConversationsRepo();
-  const current = useChatSession((s) => s.conversationId);
-  const setConversation = useChatSession((s) => s.setConversation);
+  useBindChat();
+  const current = useChatStore((s) => s.conversationId);
+  const busy = useChatStore((s) => s.busy);
   const [chats, setChats] = useState<Conversation[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -38,8 +40,8 @@ export default function ChatsScreen() {
     }, [load]),
   );
 
-  function open(id: number | null) {
-    setConversation(id);
+  async function open(id: number | null) {
+    await useChatStore.getState().open(id);
     goBack();
   }
 
@@ -51,7 +53,7 @@ export default function ChatsScreen() {
         style: 'destructive',
         onPress: async () => {
           await repo.remove(chat.id);
-          if (chat.id === current) setConversation(null);
+          if (chat.id === current) await useChatStore.getState().open(null);
           load();
         },
       },
@@ -65,7 +67,7 @@ export default function ChatsScreen() {
         <AppText variant="heading" accessibilityRole="header" style={styles.flex}>
           Chats
         </AppText>
-        <Button label="New chat" compact onPress={() => open(null)} />
+        <Button label="New chat" compact disabled={busy} onPress={() => open(null)} />
       </View>
       <FlatList
         data={chats}
@@ -75,6 +77,7 @@ export default function ChatsScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityHint="Opens this chat. Long-press to delete."
+            disabled={busy}
             onPress={() => open(item.id)}
             onLongPress={() => confirmDelete(item)}
             style={({ pressed }) => [styles.row, item.id === current && styles.current, pressed && styles.pressed]}>

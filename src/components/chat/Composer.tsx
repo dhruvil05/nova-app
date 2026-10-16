@@ -9,10 +9,12 @@ type Props = {
   busy: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
+  /** Opens voice mode */
+  onMic: () => void;
 };
 
-/** Message box with Send (or Stop while Nova is working). The mic arrives in Phase 5. */
-export function Composer({ busy, onSend, onStop }: Props) {
+/** Message box with Send, the mic (when empty), or Stop while Nova is working. */
+export function Composer({ busy, onSend, onStop, onMic }: Props) {
   const theme = useTheme();
   const styles = useStyles();
   const [text, setText] = useState('');
@@ -40,6 +42,10 @@ export function Composer({ busy, onSend, onStop }: Props) {
       {busy ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Stop Nova" onPress={onStop} style={[styles.button, styles.stop]}>
           <Icon name="stop" size={18} color={theme.colors.text} />
+        </Pressable>
+      ) : text.trim().length === 0 ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Talk to Nova" onPress={onMic} style={[styles.button, styles.send]}>
+          <Icon name="mic" size={22} color={theme.colors.onAccent} />
         </Pressable>
       ) : (
         <Pressable

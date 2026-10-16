@@ -79,6 +79,23 @@ export function resume(): void {
   TrackPlayer.play();
 }
 
+/** Music volume while Nova listens and speaks (spec 9.1: music is ducked). */
+const DUCKED_VOLUME = 0.15;
+let volumeBeforeDuck: number | null = null;
+
+/** Lowers our own player only; other apps and the system volume are untouched. */
+export function duck(): void {
+  if (!ready || volumeBeforeDuck !== null) return;
+  volumeBeforeDuck = TrackPlayer.getVolume();
+  TrackPlayer.setVolume(Math.min(volumeBeforeDuck, DUCKED_VOLUME));
+}
+
+export function unduck(): void {
+  if (!ready || volumeBeforeDuck === null) return;
+  TrackPlayer.setVolume(volumeBeforeDuck);
+  volumeBeforeDuck = null;
+}
+
 export function isPlaying(): boolean {
   return ready ? TrackPlayer.isPlaying() : false;
 }

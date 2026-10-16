@@ -86,6 +86,7 @@ function AppShell() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="file/[id]" />
         <Stack.Screen name="chats" />
+        <Stack.Screen name="voice" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="player" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
     </NavigationThemeProvider>
