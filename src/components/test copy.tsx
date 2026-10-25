@@ -15,7 +15,7 @@ const TAB_ICONS: Record<string, IconName> = {
 };
 
 /** Bottom tab bar from the UI canvas: label under icon, pill behind the active icon. */
-export function testCopy({ state, descriptors, navigation, insets }: BottomTabBarProps) {
+export function testCopy2({ state, descriptors, navigation, insets }: BottomTabBarProps) {
   const theme = useTheme();
   const styles = useStyles();
 
