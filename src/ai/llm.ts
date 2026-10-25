@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { fetch as expoFetch } from 'expo/fetch';
+import { Platform } from 'react-native';
 
 import type { ModelId } from './models';
 import { SYSTEM_PROMPT } from './prompt';
@@ -44,6 +45,9 @@ export function createLlm(apiKey: string, model: ModelId): Llm {
     apiKey,
     fetch: expoFetch as unknown as typeof globalThis.fetch,
     maxRetries: 2,
+    // The web preview calls the API from the browser with your own key (the SDK
+    // refuses by default to protect shared keys). The phone app is unaffected.
+    dangerouslyAllowBrowser: Platform.OS === 'web',
     timeout: 5 * 60_000,
   });
 

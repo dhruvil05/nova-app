@@ -41,6 +41,7 @@ export function extractionLabel(file: FileRecord, progress?: number): { text: st
   if (file.extractionStatus === 'failed') {
     if (file.extractionError === 'scanned') return { text: 'Scanned: no text found, needs OCR', tone: 'warn' };
     if (file.extractionError === 'encrypted') return { text: 'Password-protected: can’t read text', tone: 'warn' };
+    if (file.extractionError === 'dev-build') return { text: 'PDF reading needs the Nova development build', tone: 'warn' };
     return { text: 'Couldn’t read the text', tone: 'warn' };
   }
   if (file.textLength === 0) return { text: 'No text', tone: 'warn' };

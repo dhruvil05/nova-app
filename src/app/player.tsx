@@ -1,4 +1,3 @@
-import { RepeatMode, useActiveMediaItem, useIsPlaying, useProgress } from '@rntp/player';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -11,6 +10,7 @@ import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { SeekBar } from '@/components/SeekBar';
 import * as player from '@/services/player';
+import { useActiveMediaItem, useIsPlaying, useProgress } from '@/services/player';
 import { makeStyles, useTheme } from '@/theme';
 import { formatDuration } from '@/utils/trackName';
 
@@ -108,9 +108,9 @@ export default function PlayerScreen() {
           <ControlButton icon="next" label="Next" size={30} onPress={player.next} />
           <ControlButton
             icon="repeat"
-            label={repeat === RepeatMode.Off ? 'Repeat off' : repeat === RepeatMode.All ? 'Repeat all' : 'Repeat one'}
-            active={repeat !== RepeatMode.Off}
-            badge={repeat === RepeatMode.One ? '1' : undefined}
+            label={repeat === 'off' ? 'Repeat off' : repeat === 'all' ? 'Repeat all' : 'Repeat one'}
+            active={repeat !== 'off'}
+            badge={repeat === 'one' ? '1' : undefined}
             onPress={() => setRepeat(player.cycleRepeat())}
           />
         </View>

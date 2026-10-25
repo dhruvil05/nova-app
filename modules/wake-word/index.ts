@@ -27,8 +27,8 @@ declare class WakeWordNativeModule extends NativeModule<WakeWordEvents> {
   stopAsync(): Promise<void>;
   getState(): WakeServiceState;
   getStatusMessage(): string | null;
-  /** The phrase actually used ("hey nova", or a fallback the model knows). */
-  getWakePhrase(): string;
+  /** Accepted phrases: "hey nova", plus "hey computer" in case the model lacks "nova". */
+  getWakePhrases(): string[];
   /** After handling a wake-up: free the mic for speech recognition, then resume. */
   pauseListening(): void;
   resumeListening(): void;

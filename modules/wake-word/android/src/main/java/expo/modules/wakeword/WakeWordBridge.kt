@@ -52,10 +52,4 @@ object WakePrefs {
   fun setThreshold(context: Context, value: Float) {
     prefs(context).edit().putFloat("threshold", value.coerceIn(0.3f, 0.95f)).apply()
   }
-
-  fun phrase(context: Context): String = prefs(context).getString("phrase", "hey nova") ?: "hey nova"
-
-  fun setPhrase(context: Context, phrase: String) {
-    prefs(context).edit().putString("phrase", phrase).apply()
-  }
 }

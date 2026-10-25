@@ -17,9 +17,6 @@ object VoskModel {
   private const val URL_STRING = "https://alphacephei.com/vosk/models/$NAME.zip"
   private const val READY_MARKER = ".nova-ready"
 
-  /** Wake phrases to try, in order; the first whose words the model knows is used. */
-  private val PHRASES = listOf("hey nova", "okay nova", "hey computer")
-
   private fun root(context: Context) = File(context.filesDir, "vosk")
 
   fun modelDir(context: Context): File = File(root(context), NAME)
@@ -30,6 +27,7 @@ object VoskModel {
    * Downloads and unpacks the model if needed. Blocking: call off the main thread.
    * [progress] receives (stage, 0..1).
    */
+  @Synchronized // Two downloads at once would write the same file.
   @Throws(IOException::class)
   fun ensure(context: Context, progress: (stage: String, value: Double) -> Unit) {
     if (isReady(context)) {
@@ -102,17 +100,5 @@ object VoskModel {
         zis.closeEntry()
       }
     }
-  }
-
-  /**
-   * Picks the wake phrase. Vosk silently ignores words missing from the model's
-   * vocabulary, so check graph/words.txt when the model has one.
-   */
-  fun choosePhrase(dir: File): String {
-    val wordsFile = File(dir, "graph/words.txt")
-    if (!wordsFile.exists()) return PHRASES.first()
-    val vocabulary = HashSet<String>()
-    wordsFile.forEachLine { line -> line.substringBefore(' ').takeIf { it.isNotEmpty() }?.let(vocabulary::add) }
-    return PHRASES.firstOrNull { phrase -> phrase.split(' ').all { it in vocabulary } } ?: PHRASES.first()
   }
 }

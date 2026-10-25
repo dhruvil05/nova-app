@@ -26,23 +26,28 @@ class WakeWordModule : Module() {
   private val context: Context
     get() = appContext.reactContext?.applicationContext ?: throw Exceptions.ReactContextLost()
 
+  // Kept so OnDestroy only clears this instance's callbacks (after a JS reload the
+  // new module may already have registered its own).
+  private val wakeCallback: (Boolean) -> Unit = { locked ->
+    sendEvent("onWake", mapOf("at" to System.currentTimeMillis(), "locked" to locked))
+  }
+  private val statusCallback: (String, String?) -> Unit = { state, message ->
+    sendEvent("onStatus", mapOf("state" to state, "message" to message))
+  }
+
   override fun definition() = ModuleDefinition {
     Name("WakeWord")
 
     Events("onWake", "onStatus", "onModelProgress")
 
     OnCreate {
-      WakeWordBridge.onWake = { locked ->
-        sendEvent("onWake", mapOf("at" to System.currentTimeMillis(), "locked" to locked))
-      }
-      WakeWordBridge.onStatus = { state, message ->
-        sendEvent("onStatus", mapOf("state" to state, "message" to message))
-      }
+      WakeWordBridge.onWake = wakeCallback
+      WakeWordBridge.onStatus = statusCallback
     }
 
     OnDestroy {
-      WakeWordBridge.onWake = null
-      WakeWordBridge.onStatus = null
+      if (WakeWordBridge.onWake === wakeCallback) WakeWordBridge.onWake = null
+      if (WakeWordBridge.onStatus === statusCallback) WakeWordBridge.onStatus = null
     }
 
     AsyncFunction("prepareModelAsync") Coroutine { ->
@@ -88,7 +93,7 @@ class WakeWordModule : Module() {
 
     Function("getState") { WakeWordBridge.state }
     Function("getStatusMessage") { WakeWordBridge.lastMessage }
-    Function("getWakePhrase") { WakePrefs.phrase(context) }
+    Function("getWakePhrases") { WakeWordService.WAKE_PHRASES }
     Function("isEnabled") { WakePrefs.isEnabled(context) }
 
     Function("pauseListening") {

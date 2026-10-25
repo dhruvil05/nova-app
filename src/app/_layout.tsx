@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo } from 'react';
 import { AppState } from 'react-native';
 
+import { DialogHost } from '@/components/DialogHost';
 import { migrate } from '@/db/migrate';
 import { setupPlayer } from '@/services/player';
 import { usePrivacy } from '@/store/privacy';
@@ -93,6 +94,7 @@ function AppShell() {
         <Stack.Screen name="player" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
       <WakeWordListener />
+      <DialogHost />
     </NavigationThemeProvider>
   );
 }

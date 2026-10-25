@@ -1,6 +1,24 @@
-import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
+import type * as SpeechRecognition from 'expo-speech-recognition';
+import { PermissionsAndroid, Platform } from 'react-native';
+
+import { HAS_SPEECH_RECOGNITION } from '@/services/nativeModules';
 
 import type { VoiceLanguage } from './speechText';
+
+// expo-speech-recognition loads its native module on import, and Expo Go doesn't
+// include it; this file is the only place that touches it.
+const sr: typeof SpeechRecognition | null = HAS_SPEECH_RECOGNITION
+  ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+    (require('expo-speech-recognition') as typeof SpeechRecognition)
+  : null;
+
+/** False in Expo Go: voice needs the Nova development build. */
+export const speechRecognitionInstalled = sr !== null;
+
+/** Subscribes to recogniser events (does nothing when speech recognition isn't installed). */
+export const useSpeechRecognitionEvent: typeof SpeechRecognition.useSpeechRecognitionEvent = sr
+  ? sr.useSpeechRecognitionEvent
+  : () => {};
 
 /**
  * Speech-to-text with Android's built-in recogniser (expo-speech-recognition).
@@ -13,14 +31,20 @@ export const SILENCE_TIMEOUT_MS = 8000;
 
 export function isRecognitionAvailable(): boolean {
   try {
-    return ExpoSpeechRecognitionModule.isRecognitionAvailable();
+    return sr?.ExpoSpeechRecognitionModule.isRecognitionAvailable() ?? false;
   } catch {
     return false;
   }
 }
 
 export async function ensureMicPermission(): Promise<boolean> {
-  const res = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+  if (!sr) {
+    // Web has no PermissionsAndroid (and no voice in Nova's web preview).
+    if (Platform.OS !== 'android') return false;
+    const res = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+    return res === PermissionsAndroid.RESULTS.GRANTED;
+  }
+  const res = await sr.ExpoSpeechRecognitionModule.requestPermissionsAsync();
   return res.granted;
 }
 
@@ -31,7 +55,7 @@ export async function ensureMicPermission(): Promise<boolean> {
 export const GOOGLE_RECOGNIZER = 'com.google.android.googlequicksearchbox';
 
 export function startListening(language: VoiceLanguage, opts?: { servicePackage?: string }): void {
-  ExpoSpeechRecognitionModule.start({
+  sr?.ExpoSpeechRecognitionModule.start({
     lang: language,
     androidRecognitionServicePackage: opts?.servicePackage,
     interimResults: true,
@@ -51,7 +75,7 @@ export function startListening(language: VoiceLanguage, opts?: { servicePackage?
 /** Stop listening and deliver what was heard so far as a final result. */
 export function finishListening(): void {
   try {
-    ExpoSpeechRecognitionModule.stop();
+    sr?.ExpoSpeechRecognitionModule.stop();
   } catch {
     // Not listening.
   }
@@ -60,7 +84,7 @@ export function finishListening(): void {
 /** Stop listening and throw away what was heard. */
 export function cancelListening(): void {
   try {
-    ExpoSpeechRecognitionModule.abort();
+    sr?.ExpoSpeechRecognitionModule.abort();
   } catch {
     // Not listening.
   }

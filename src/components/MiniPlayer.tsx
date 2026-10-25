@@ -1,8 +1,8 @@
-import { useActiveMediaItem, useIsPlaying, useProgress } from '@rntp/player';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import * as player from '@/services/player';
+import { useActiveMediaItem, useIsPlaying, useProgress } from '@/services/player';
 import { makeStyles, useTheme } from '@/theme';
 
 import { AppText } from './AppText';

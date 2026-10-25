@@ -1,13 +1,13 @@
-import { useActiveMediaItem } from '@rntp/player';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Linking, Pressable, View } from 'react-native';
+import { ActivityIndicator, FlatList, Linking, Platform, Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { ArtTile, initials } from '@/components/ArtTile';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { Icon } from '@/components/Icon';
+import { LimitedBuildNotice } from '@/components/LimitedBuildNotice';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { SearchField } from '@/components/SearchField';
@@ -24,8 +24,10 @@ import {
 } from '@/services/musicLibrary';
 import { searchMusic } from '@/services/musicSearch';
 import * as player from '@/services/player';
+import { useActiveMediaItem } from '@/services/player';
 import { useLibraryVersion } from '@/store/libraryVersion';
 import { makeStyles, useTheme } from '@/theme';
+import { confirmAction, showMenu, showMessage, type MenuOption } from '@/utils/dialog';
 
 type Tab = 'songs' | 'artists' | 'albums';
 type Drill = { kind: 'artist' | 'album'; name: string } | null;
@@ -89,6 +91,10 @@ export default function MusicScreen() {
 
   async function rescan() {
     if (scan) return;
+    if (Platform.OS === 'web') {
+      showMessage('Music', 'Scanning your phone’s music needs the Android app.');
+      return;
+    }
     setNotice(null);
     setScan({ scanned: 0, total: 0 });
     try {
@@ -102,7 +108,7 @@ export default function MusicScreen() {
       );
     } catch (e) {
       if (e instanceof PermissionDeniedError) setPermissionDenied(true);
-      else Alert.alert('Music', 'Could not scan your music. Please try again.');
+      else showMessage('Music', 'Could not scan your music. Please try again.');
     } finally {
       setScan(null);
       useLibraryVersion.getState().bump();
@@ -110,13 +116,17 @@ export default function MusicScreen() {
   }
 
   async function importFiles() {
+    if (Platform.OS === 'web') {
+      showMessage('Import', 'Importing music needs the Android app.');
+      return;
+    }
     setNotice(null);
     setImporting(true);
     try {
       const added = await importAudioFiles(repo);
       if (added > 0) setNotice(`Imported ${added} ${added === 1 ? 'song' : 'songs'}`);
     } catch {
-      Alert.alert('Import', 'Could not import those files. Please try again.');
+      showMessage('Import', 'Could not import those files. Please try again.');
     } finally {
       setImporting(false);
       useLibraryVersion.getState().bump();
@@ -128,30 +138,23 @@ export default function MusicScreen() {
     player.playTracks(list, { shuffle: true });
   }
 
+  async function deleteTrack(track: Track) {
+    const ok = await confirmAction({
+      title: 'Delete imported song?',
+      message: `“${track.title}” will be removed from Nova.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await deleteImportedTrack(repo, track);
+    useLibraryVersion.getState().bump();
+  }
+
   function trackOptions(track: Track) {
-    const buttons: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [
-      { text: 'Add to queue', onPress: () => player.queueTracks([track]) },
-    ];
-    if (track.source === 'imported') {
-      buttons.push({
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () =>
-          Alert.alert('Delete imported song?', `“${track.title}” will be removed from Nova.`, [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete',
-              style: 'destructive',
-              onPress: async () => {
-                await deleteImportedTrack(repo, track);
-                useLibraryVersion.getState().bump();
-              },
-            },
-          ]),
-      });
-    }
-    buttons.push({ text: 'Cancel', style: 'cancel' });
-    Alert.alert(track.title, track.artist ?? undefined, buttons);
+    const items: MenuOption[] = [];
+    if (player.playerAvailable) items.push({ label: 'Add to queue', onSelect: () => player.queueTracks([track]) });
+    if (track.source === 'imported') items.push({ label: 'Delete', destructive: true, onSelect: () => deleteTrack(track) });
+    if (items.length > 0) showMenu(track.title, items, track.artist ?? undefined);
   }
 
   const showingTracks = searching || drill !== null || tab === 'songs';
@@ -168,6 +171,9 @@ export default function MusicScreen() {
           <IconButton icon="plus" label="Import audio files" onPress={importFiles} disabled={importing} />
         </View>
       </View>
+      {!player.playerAvailable ? (
+        <LimitedBuildNotice text="Playing music needs the Nova development build. In Expo Go you can scan and browse your library." />
+      ) : null}
       {!libraryEmpty ? (
         <>
           <SearchField value={query} onChangeText={setQuery} placeholder="Songs, artists, albums" />

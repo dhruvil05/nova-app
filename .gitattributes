@@ -1,0 +1,9 @@
+# Keep LF line endings in the repo and working tree on every OS (stops Git on
+# Windows from rewriting files to CRLF, e.g. on stash/checkout).
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.ttf binary
+*.wasm binary

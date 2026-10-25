@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Share, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Share, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
@@ -10,11 +10,13 @@ import { Icon } from '@/components/Icon';
 import { IconButton } from '@/components/IconButton';
 import { Screen } from '@/components/Screen';
 import { Toggle } from '@/components/Toggle';
+import { useChatStore } from '@/ai/chatStore';
 import { useNotesRepo } from '@/db/hooks';
 import type { Note } from '@/db/notesRepo';
 import { useNotesVersion } from '@/store/notesVersion';
 import { usePrivacy } from '@/store/privacy';
 import { makeStyles, useTheme } from '@/theme';
+import { confirmAction, showMessage } from '@/utils/dialog';
 import { formatEdited } from '@/utils/formatDate';
 
 const AUTOSAVE_MS = 500;
@@ -48,7 +50,13 @@ export default function NoteEditorScreen() {
   // Refs let the unmount cleanup see the latest values.
   const latest = useRef({ title: '', body: '' });
   const dirty = useRef(false);
+  /** Bumped on every keystroke, so a save in flight knows if newer edits arrived. */
+  const editVersion = useRef(0);
   const deleted = useRef(false);
+  /** The note actually loaded (not missing, and not left locked). */
+  const loaded = useRef(false);
+  /** It was blank when opened (a fresh "+" note), so leaving it blank discards it. */
+  const blankOnOpen = useRef(false);
   const repoRef = useRef(repo);
   useEffect(() => {
     repoRef.current = repo;
@@ -73,6 +81,8 @@ export default function NoteEditorScreen() {
         }
       }
       latest.current = { title: found.title, body: found.body };
+      blankOnOpen.current = found.title.trim() === '' && found.body.trim() === '';
+      loaded.current = true;
       setNote(found);
       setTitle(found.title);
       setBody(found.body);
@@ -93,7 +103,10 @@ export default function NoteEditorScreen() {
     if (!dirty.current) return;
     setSaveState('saving');
     const timer = setTimeout(async () => {
+      const version = editVersion.current;
       const updated = await repoRef.current.update(id, latest.current, UI);
+      // Typing during the save makes another save necessary.
+      if (editVersion.current !== version) return;
       dirty.current = false;
       if (updated) setNote(updated);
       setSaveState('saved');
@@ -101,16 +114,17 @@ export default function NoteEditorScreen() {
     return () => clearTimeout(timer);
   }, [title, body, id]);
 
-  // On leave: save pending edits, and drop notes that were never written in.
+  // On leave: save pending edits, and drop new notes that were never written in.
   useEffect(() => {
     return () => {
-      if (deleted.current) return;
+      // Never touch a note that didn't load (missing, or the unlock was cancelled).
+      if (deleted.current || !loaded.current) return;
       const { title: t, body: b } = latest.current;
       const { bump } = useNotesVersion.getState();
-      if (t.trim() === '' && b.trim() === '') {
-        repoRef.current.remove(id, UI).then(bump);
+      if (blankOnOpen.current && t.trim() === '' && b.trim() === '') {
+        repoRef.current.remove(id, UI).then(bump, () => {});
       } else if (dirty.current) {
-        repoRef.current.update(id, { title: t, body: b }, UI).then(bump);
+        repoRef.current.update(id, { title: t, body: b }, UI).then(bump, () => {});
       }
     };
   }, [id]);
@@ -118,6 +132,7 @@ export default function NoteEditorScreen() {
   function edit(next: { title?: string; body?: string }) {
     latest.current = { ...latest.current, ...next };
     dirty.current = true;
+    editVersion.current += 1;
     if (next.title !== undefined) setTitle(next.title);
     if (next.body !== undefined) setBody(next.body);
   }
@@ -129,21 +144,27 @@ export default function NoteEditorScreen() {
     dirty.current = false;
     if (updated) setNote(updated);
     setSaveState('saved');
+    // If Nova already read this note in the open chat, that text is part of the
+    // conversation sent with every message; start a fresh chat so it stops.
+    if (next && (await useChatStore.getState().forgetNote(id))) {
+      showMessage(
+        'Started a new chat',
+        'Nova had read this note in your current chat, so that chat was closed. Older chats in Chats may still contain it; delete them there if needed.',
+      );
+    }
   }
 
-  function confirmDelete() {
-    Alert.alert('Delete this note?', 'This can’t be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          deleted.current = true;
-          await repo.remove(id, UI);
-          goBack();
-        },
-      },
-    ]);
+  async function confirmDelete() {
+    const ok = await confirmAction({
+      title: 'Delete this note?',
+      message: 'This can’t be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    deleted.current = true;
+    await repo.remove(id, UI);
+    goBack();
   }
 
   function share() {

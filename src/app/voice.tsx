@@ -1,6 +1,5 @@
 import WakeWord from '@modules/wake-word';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { Animated, BackHandler, Easing, Pressable, View } from 'react-native';
 
@@ -25,7 +24,9 @@ import {
   ensureMicPermission,
   finishListening,
   isRecognitionAvailable,
+  speechRecognitionInstalled,
   startListening,
+  useSpeechRecognitionEvent,
 } from '@/voice/recognizer';
 import { initialVoiceState, voiceReducer } from '@/voice/session';
 import { VOICE_LANGUAGES, isStopCommand, speechLanguageFor, toSpeakable } from '@/voice/speechText';
@@ -62,6 +63,8 @@ export default function VoiceScreen() {
   const stateRef = useRef(state);
   const prefsRef = useRef<VoicePrefs | null>(null);
   const listenStartedAt = useRef(0);
+  /** Pending microphone restart (cleared on leave so it can't fire after unmount). */
+  const restartTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The phone was locked when the conversation began: safe tools only, and hide afterwards. */
   const lockedRef = useRef(false);
   const startedRef = useRef(false);
@@ -90,6 +93,10 @@ export default function VoiceScreen() {
       if (cancelled) return;
       setPrefs(loaded);
       prefsRef.current = loaded;
+      if (!speechRecognitionInstalled) {
+        setFatal('Voice needs the Nova development build. It isn’t available in Expo Go.');
+        return;
+      }
       if (!isRecognitionAvailable()) {
         setFatal('Speech recognition isn’t available on this phone. Install or update the Google app.');
         return;
@@ -110,6 +117,7 @@ export default function VoiceScreen() {
     })();
     return () => {
       cancelled = true;
+      if (restartTimer.current) clearTimeout(restartTimer.current);
       cancelListening();
       stopSpeaking();
       if (stateRef.current.phase === 'thinking') useChatStore.getState().stop();
@@ -170,9 +178,14 @@ export default function VoiceScreen() {
           dispatch({ type: 'REPLY', text: res.replyText || 'Sorry, I can’t help with that.' });
         } else if (res.status === 'aborted') {
           dispatch({ type: 'STOP' });
+        } else if (res.status === 'busy') {
+          dispatch({ type: 'AGENT_FAILED', message: 'Nova is still answering in the chat. Try again in a moment.' });
         } else {
           dispatch({ type: 'AGENT_FAILED', message: notice ?? 'Nova couldn’t reply. Try again.' });
         }
+      })
+      .catch(() => {
+        if (!cancelled) dispatch({ type: 'AGENT_FAILED', message: 'Nova couldn’t reply. Try again.' });
       });
     return () => {
       cancelled = true;
@@ -187,7 +200,9 @@ export default function VoiceScreen() {
       language: speechLanguageFor(state.reply, p.language),
       rate: p.rate,
       voiceId: p.voiceId,
-    }).then(() => dispatch({ type: 'SPEECH_DONE' }));
+    })
+      .catch(() => {})
+      .then(() => dispatch({ type: 'SPEECH_DONE' }));
   }, [state.phase, state.reply]);
 
   // Music comes back up whenever the conversation pauses.
@@ -216,7 +231,9 @@ export default function VoiceScreen() {
       // The recogniser gives up after a few seconds; keep listening until 8 s of silence.
       if (Date.now() - listenStartedAt.current < SILENCE_TIMEOUT_MS && prefsRef.current) {
         const language = prefsRef.current.language;
-        setTimeout(() => {
+        if (restartTimer.current) clearTimeout(restartTimer.current);
+        restartTimer.current = setTimeout(() => {
+          restartTimer.current = null;
           if (stateRef.current.phase === 'listening') startListening(language, { servicePackage: RECOGNIZER_PACKAGE });
         }, RESTART_DELAY_MS);
         return;

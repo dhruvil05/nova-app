@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { makeStyles, useTheme } from '@/theme';
+import { speechRecognitionInstalled } from '@/voice/recognizer';
 
 import { Icon } from '../Icon';
 
@@ -43,7 +44,7 @@ export function Composer({ busy, onSend, onStop, onMic }: Props) {
         <Pressable accessibilityRole="button" accessibilityLabel="Stop Nova" onPress={onStop} style={[styles.button, styles.stop]}>
           <Icon name="stop" size={18} color={theme.colors.text} />
         </Pressable>
-      ) : text.trim().length === 0 ? (
+      ) : text.trim().length === 0 && speechRecognitionInstalled ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Talk to Nova" onPress={onMic} style={[styles.button, styles.send]}>
           <Icon name="mic" size={22} color={theme.colors.onAccent} />
         </Pressable>

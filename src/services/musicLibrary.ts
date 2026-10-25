@@ -1,4 +1,4 @@
-import { getBulkMetadata } from '@missingcore/react-native-metadata-retriever';
+import type * as MetadataRetriever from '@missingcore/react-native-metadata-retriever';
 import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 // The new class-based media-library API reads each field with a separate async
@@ -6,7 +6,14 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
 
 import type { NewTrack, Track, TracksRepo } from '@/db/tracksRepo';
+import { HAS_METADATA_RETRIEVER } from '@/services/nativeModules';
 import { parseTrackFilename } from '@/utils/trackName';
+
+// Native-only (not in Expo Go): without it, titles come from file names.
+const metadata: typeof MetadataRetriever | null = HAS_METADATA_RETRIEVER
+  ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+    (require('@missingcore/react-native-metadata-retriever') as typeof MetadataRetriever)
+  : null;
 
 /** Skip ringtones, notification sounds and short voice notes. */
 const MIN_DURATION_SECONDS = 30;
@@ -40,9 +47,10 @@ type Tags = { title: string | null; artist: string | null; albumTitle: string | 
 /** Reads embedded tags; any file that fails just gets no tags (filename is used instead). */
 async function readTags(uris: string[]): Promise<Map<string, Tags>> {
   const tags = new Map<string, Tags>();
+  if (!metadata) return tags;
   for (let i = 0; i < uris.length; i += TAG_BATCH) {
     try {
-      const { results } = await getBulkMetadata(uris.slice(i, i + TAG_BATCH), [...TAG_FIELDS]);
+      const { results } = await metadata.getBulkMetadata(uris.slice(i, i + TAG_BATCH), [...TAG_FIELDS]);
       for (const r of results) tags.set(r.uri, r.data);
     } catch {
       // Tag reading is best-effort.

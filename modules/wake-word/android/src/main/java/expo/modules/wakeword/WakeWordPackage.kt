@@ -45,8 +45,9 @@ class WakeActivityListener : ReactActivityLifecycleListener {
     }
   }
 
-  override fun onNewIntent(intent: Intent): Boolean {
-    if (intent.getBooleanExtra(WakeWordBridge.EXTRA_WAKE, false)) {
+  // Nullable: Expo's activity wrapper may pass null through.
+  override fun onNewIntent(intent: Intent?): Boolean {
+    if (intent?.getBooleanExtra(WakeWordBridge.EXTRA_WAKE, false) == true) {
       WakeWordBridge.activityRef?.get()?.let { showOverLockScreen(it, true) }
     }
     // Let the rest of the app (expo-router's linking) handle the URL too.

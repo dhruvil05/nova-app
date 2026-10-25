@@ -143,6 +143,8 @@ export default function FileViewerScreen() {
                 ? 'Reading scanned pages needs OCR, which comes in a later update. You can still open and share it.'
                 : file.extractionError === 'encrypted'
                   ? 'It is password-protected. Remove the password and import it again.'
+                  : file.extractionError === 'dev-build'
+                    ? 'You’re in Expo Go, which can’t read PDFs. Open the file in the Nova development build and tap Try again.'
                   : 'You can still open and share it, or try reading it again.'}
             </AppText>
             {file.extractionError !== 'scanned' && file.extractionError !== 'encrypted' ? (

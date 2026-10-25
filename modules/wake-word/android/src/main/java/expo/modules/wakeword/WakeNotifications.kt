@@ -51,12 +51,11 @@ object WakeNotifications {
     )
 
   /** The permanent notification of the listening service (spec 9.2). */
-  fun listening(context: Context, phrase: String, paused: Boolean): Notification {
+  fun listening(context: Context, paused: Boolean): Notification {
     ensureChannels(context)
     val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()
     val title = if (paused) "Nova is answering" else "Nova is listening"
-    val spoken = phrase.split(' ').joinToString(" ") { word -> word.replaceFirstChar { c -> c.uppercaseChar() } }
-    val text = "Say “$spoken”"
+    val text = "Say “Hey Nova”"
     return NotificationCompat.Builder(context, CHANNEL_LISTENING)
       .setSmallIcon(ICON)
       .setContentTitle(title)
@@ -70,22 +69,24 @@ object WakeNotifications {
       .build()
   }
 
-  /** Opens the voice screen over the lock screen when a direct launch isn't allowed. */
-  fun showWake(context: Context, intent: Intent) {
+  /**
+   * After "Hey Nova": a tap-to-talk notification, and with [fullScreen] it also
+   * opens the voice screen over the lock screen by itself.
+   */
+  fun showWake(context: Context, intent: Intent, fullScreen: Boolean) {
     ensureChannels(context)
     val content = pending(context, 1, intent)
-    val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
+    val builder = NotificationCompat.Builder(context, CHANNEL_ALERTS)
       .setSmallIcon(ICON)
       .setContentTitle("Nova")
-      .setContentText("I’m listening…")
+      .setContentText("Tap to talk to Nova")
       .setPriority(NotificationCompat.PRIORITY_HIGH)
       .setCategory(NotificationCompat.CATEGORY_CALL)
-      .setFullScreenIntent(content, true)
       .setContentIntent(content)
       .setAutoCancel(true)
       .setTimeoutAfter(60_000)
-      .build()
-    notify(context, WAKE_ID, notification)
+    if (fullScreen) builder.setFullScreenIntent(content, true)
+    notify(context, WAKE_ID, builder.build())
   }
 
   /** After a reboot or when the system stopped the service: tap to resume listening. */

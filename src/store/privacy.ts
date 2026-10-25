@@ -1,7 +1,7 @@
-import { Alert } from 'react-native';
 import { create } from 'zustand';
 
 import { authenticate } from '@/services/auth';
+import { showMessage } from '@/utils/dialog';
 
 type PrivacyState = {
   /** True after a successful unlock; reset whenever the app goes to the background. */
@@ -21,7 +21,7 @@ export const usePrivacy = create<PrivacyState>((set, get) => ({
       set({ unlocked: true });
       return true;
     }
-    if (result.reason !== 'cancelled') Alert.alert('Private notes', result.message);
+    if (result.reason !== 'cancelled') showMessage('Private notes', result.message);
     return false;
   },
 

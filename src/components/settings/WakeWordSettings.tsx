@@ -1,10 +1,11 @@
 import WakeWord, { isWakeWordAvailable, type ModelProgressEvent, type WakeServiceState } from '@modules/wake-word';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, PermissionsAndroid, Platform, View } from 'react-native';
+import { PermissionsAndroid, Platform, View } from 'react-native';
 
 import { useSettingsRepo } from '@/db/hooks';
 import { makeStyles } from '@/theme';
+import { confirmAction, showMessage } from '@/utils/dialog';
 import { ensureMicPermission } from '@/voice/recognizer';
 import { WAKE_SENSITIVITIES, loadWakeSensitivity } from '@/voice/wakePrefs';
 
@@ -23,10 +24,6 @@ const STATE_TEXT: Record<WakeServiceState, string> = {
   error: 'Problem',
 };
 
-function titleCase(phrase: string) {
-  return phrase.replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 /** Settings › “Hey Nova”: on/off, speech model, sensitivity, phone setup (spec 9.2, 10.4). */
 export function WakeWordSettings() {
   const styles = useStyles();
@@ -34,7 +31,6 @@ export function WakeWordSettings() {
   const [enabled, setEnabled] = useState(false);
   const [state, setState] = useState<WakeServiceState>('stopped');
   const [message, setMessage] = useState<string | null>(null);
-  const [phrase, setPhrase] = useState('hey nova');
   const [sensitivity, setSensitivity] = useState(0.5);
   const [download, setDownload] = useState<ModelProgressEvent | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,7 +40,6 @@ export function WakeWordSettings() {
     setEnabled(WakeWord.isEnabled());
     setState(WakeWord.getState());
     setMessage(WakeWord.getStatusMessage());
-    setPhrase(WakeWord.getWakePhrase());
   }, []);
 
   useFocusEffect(
@@ -59,7 +54,6 @@ export function WakeWordSettings() {
     const status = WakeWord.addListener('onStatus', (e) => {
       setState(e.state);
       setMessage(e.message ?? null);
-      setPhrase(WakeWord!.getWakePhrase());
     });
     const progress = WakeWord.addListener('onModelProgress', setDownload);
     return () => {
@@ -76,22 +70,18 @@ export function WakeWordSettings() {
     );
   }
 
-  async function confirmDownload(): Promise<boolean> {
-    return new Promise((resolve) =>
-      Alert.alert(
-        'Download speech model?',
-        `“Hey Nova” uses an offline speech model (${MODEL_SIZE}) so listening stays on your phone. Download it now? Wi-Fi recommended.`,
-        [
-          { text: 'Not now', style: 'cancel', onPress: () => resolve(false) },
-          { text: 'Download', onPress: () => resolve(true) },
-        ],
-      ),
-    );
+  function confirmDownload(): Promise<boolean> {
+    return confirmAction({
+      title: 'Download speech model?',
+      message: `“Hey Nova” uses an offline speech model (${MODEL_SIZE}) so listening stays on your phone. Download it now? Wi-Fi recommended.`,
+      confirmLabel: 'Download',
+      cancelLabel: 'Not now',
+    });
   }
 
   async function turnOn() {
     if (!(await ensureMicPermission())) {
-      Alert.alert('Microphone needed', 'Allow the microphone so Nova can listen for “Hey Nova”.');
+      showMessage('Microphone needed', 'Allow the microphone so Nova can listen for “Hey Nova”.');
       return;
     }
     if (Number(Platform.Version) >= 33) {
@@ -112,7 +102,7 @@ export function WakeWordSettings() {
       else await WakeWord!.stopAsync();
     } catch (e) {
       setDownload(null);
-      Alert.alert('“Hey Nova”', e instanceof Error ? e.message : 'Something went wrong.');
+      showMessage('“Hey Nova”', e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
       setBusy(false);
       refresh();
@@ -121,8 +111,12 @@ export function WakeWordSettings() {
 
   async function chooseSensitivity(value: number) {
     setSensitivity(value);
-    await settings.set('wake.sensitivity', String(value));
-    if (WakeWord!.isEnabled()) await WakeWord!.startAsync(value);
+    try {
+      await settings.set('wake.sensitivity', String(value));
+      if (WakeWord!.isEnabled()) await WakeWord!.startAsync(value);
+    } catch (e) {
+      showMessage('“Hey Nova”', e instanceof Error ? e.message : 'Couldn’t change the sensitivity.');
+    }
   }
 
   const downloading = download && download.stage !== 'ready' && download.stage !== 'error';
@@ -131,7 +125,7 @@ export function WakeWordSettings() {
     <View style={styles.wrap}>
       <View style={styles.row}>
         <View style={styles.flex}>
-          <AppText>Listen for “{titleCase(phrase)}”</AppText>
+          <AppText>Listen for “Hey Nova”</AppText>
           <AppText variant="caption" color="textMuted">
             {downloading
               ? download.stage === 'downloading'
@@ -145,11 +139,9 @@ export function WakeWordSettings() {
         <Toggle value={enabled} onChange={toggle} label="Listen for Hey Nova" disabled={busy} />
       </View>
 
-      {phrase !== 'hey nova' ? (
-        <AppText variant="caption" color="private">
-          The speech model doesn’t know the word “Nova”, so the wake phrase is “{titleCase(phrase)}”.
-        </AppText>
-      ) : null}
+      <AppText variant="caption" color="textMuted">
+        If Nova doesn’t wake to “Hey Nova”, say “Hey Computer”: the offline speech model may not know the word “Nova”.
+      </AppText>
 
       <View style={styles.divider} />
 

@@ -174,6 +174,20 @@ describe('runTurn', () => {
     expectValidHistory(stored);
   });
 
+  it('answers a tool call left unanswered by an interrupted earlier turn', async () => {
+    const { tools, stored, persist } = await setup();
+    const history: MessageParam[] = [
+      { role: 'user', content: 'search my notes' },
+      { role: 'assistant', content: [{ type: 'tool_use', id: 'old', name: 'search_notes', input: { query: 'x' } }] },
+    ];
+    const { llm, requests } = fakeLlm([text('Hi again.')]);
+    expect(await runTurn({ llm, history, userText: 'hello?', tools, persist })).toEqual({ status: 'done' });
+    const firstAppended = stored[0].content as unknown as Block[];
+    expect(firstAppended[0]).toMatchObject({ type: 'tool_result', tool_use_id: 'old', is_error: true });
+    expectValidHistory([...history, ...stored]);
+    expect(requests).toHaveLength(1);
+  });
+
   it('continues after pause_turn without running anything', async () => {
     const { tools, persist } = await setup();
     const { llm, requests } = fakeLlm([reply([thinking], 'pause_turn'), text('Finished.')]);

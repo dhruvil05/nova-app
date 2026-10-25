@@ -69,6 +69,25 @@ export type RunTurnOptions = {
   isParseError?(error: unknown): boolean;
 };
 
+/** tool_use blocks in the last assistant message that have no tool_result after them. */
+export function unansweredToolUses(history: MessageParam[]): Anthropic.Beta.BetaToolUseBlock[] {
+  const lastAssistant = history.map((m) => m.role).lastIndexOf('assistant');
+  if (lastAssistant < 0) return [];
+  const message = history[lastAssistant];
+  if (!Array.isArray(message.content)) return [];
+  const uses = (message.content as { type: string }[]).filter(
+    (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use',
+  );
+  const answered = new Set<string>();
+  for (const later of history.slice(lastAssistant + 1)) {
+    if (!Array.isArray(later.content)) continue;
+    for (const b of later.content as { type: string; tool_use_id?: string }[]) {
+      if (b.type === 'tool_result' && b.tool_use_id) answered.add(b.tool_use_id);
+    }
+  }
+  return uses.filter((u) => !answered.has(u.id));
+}
+
 export async function runTurn(opts: RunTurnOptions): Promise<TurnOutcome> {
   const messages: MessageParam[] = [...opts.history];
   const emit = (e: AgentEvent) => opts.onEvent?.(e);
@@ -93,6 +112,12 @@ export async function runTurn(opts: RunTurnOptions): Promise<TurnOutcome> {
   async function finishWithoutReply(text: string) {
     if (!repliedThisTurn) await append({ role: 'assistant', content: [{ type: 'text', text }] });
   }
+
+  // A previous turn that was cut off (app closed, save failed) may have left a
+  // tool call without its result at the end of the history; answer it first,
+  // or the API rejects every later request in this conversation.
+  const dangling = unansweredToolUses(messages);
+  if (dangling.length > 0) await answerAll(dangling, 'Not run: the previous turn was interrupted.');
 
   await append({ role: 'user', content: opts.userText });
   await append({ role: 'system', content: contextMessage(opts.now ?? new Date(), { voice: opts.voice }) });

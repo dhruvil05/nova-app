@@ -1,20 +1,23 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { useChatStore } from '@/ai/chatStore';
 import { MODELS, resolveModel, type ModelId } from '@/ai/models';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { IconButton } from '@/components/IconButton';
+import { LimitedBuildNotice } from '@/components/LimitedBuildNotice';
 import { Screen } from '@/components/Screen';
 import { VoiceSettings } from '@/components/settings/VoiceSettings';
 import { WakeWordSettings } from '@/components/settings/WakeWordSettings';
 import { useConversationsRepo, useSettingsRepo } from '@/db/hooks';
+import { IS_LIMITED_BUILD, LIMITED_BUILD_MESSAGE } from '@/services/nativeModules';
 import { clearApiKey, getApiKey, maskApiKey, setApiKey } from '@/services/secrets';
 import { usePrivacy } from '@/store/privacy';
 import { makeStyles, useTheme } from '@/theme';
+import { confirmAction, showMessage } from '@/utils/dialog';
 
 function goBack() {
   if (router.canGoBack()) router.back();
@@ -36,8 +39,13 @@ export default function SettingsScreen() {
   const [model, setModel] = useState<ModelId>(resolveModel(null));
 
   useEffect(() => {
-    getApiKey().then(setSavedKey);
-    settings.get('ai.model').then((m) => setModel(resolveModel(m)));
+    getApiKey()
+      .then(setSavedKey)
+      .catch(() => setSavedKey(null));
+    settings
+      .get('ai.model')
+      .then((m) => setModel(resolveModel(m)))
+      .catch(() => {});
   }, [settings]);
 
   async function saveKey() {
@@ -48,44 +56,48 @@ export default function SettingsScreen() {
       setKeyDraft('');
       setEditingKey(false);
     } catch {
-      Alert.alert('API key', 'Could not save the key. Check it is not empty and try again.');
+      showMessage('API key', 'Could not save the key. Check it is not empty and try again.');
     } finally {
       setSavingKey(false);
     }
   }
 
-  function removeKey() {
-    Alert.alert('Remove API key?', 'Nova won’t be able to reach the AI until you add a key again.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          await clearApiKey();
-          setSavedKey(null);
-        },
-      },
-    ]);
+  async function removeKey() {
+    const ok = await confirmAction({
+      title: 'Remove API key?',
+      message: 'Nova won’t be able to reach the AI until you add a key again.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    });
+    if (!ok) return;
+    await clearApiKey();
+    setSavedKey(null);
   }
 
   async function chooseModel(id: ModelId) {
     setModel(id);
-    await settings.set('ai.model', id);
+    try {
+      await settings.set('ai.model', id);
+    } catch {
+      showMessage('Model', 'Couldn’t save your choice. Please try again.');
+    }
   }
 
-  function clearHistory() {
-    Alert.alert('Clear all chats?', 'Every conversation with Nova will be deleted. Notes and files Nova made stay.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: async () => {
-          await conversations.clearAll();
-          await useChatStore.getState().open(null);
-          Alert.alert('Chats cleared');
-        },
-      },
-    ]);
+  async function clearHistory() {
+    if (useChatStore.getState().busy) {
+      showMessage('Nova is busy', 'Wait for Nova to finish replying, then try again.');
+      return;
+    }
+    const ok = await confirmAction({
+      title: 'Clear all chats?',
+      message: 'Every conversation with Nova will be deleted. Notes and files Nova made stay.',
+      confirmLabel: 'Clear',
+      destructive: true,
+    });
+    if (!ok) return;
+    await conversations.clearAll();
+    await useChatStore.getState().open(null);
+    showMessage('Chats cleared');
   }
 
   const showKeyInput = editingKey || !savedKey;
@@ -101,6 +113,7 @@ export default function SettingsScreen() {
 
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          {IS_LIMITED_BUILD ? <LimitedBuildNotice text={LIMITED_BUILD_MESSAGE} /> : null}
           <Section title="AI">
             <View style={styles.row}>
               <View style={styles.rowText}>

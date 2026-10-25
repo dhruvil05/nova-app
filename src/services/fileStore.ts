@@ -1,4 +1,4 @@
-import { extractPdfText } from '@modules/pdf-text';
+import { extractPdfText, isPdfTextAvailable } from '@modules/pdf-text';
 import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -128,6 +128,11 @@ async function extractOne(repo: FilesRepo, file: FileRecord, onProgress: (p: num
   }
 
   if (file.kind === 'pdf') {
+    if (!isPdfTextAvailable) {
+      // Expo Go: the PDF reader is native code; "Try again" works in the dev build.
+      await repo.setFailed(file.id, 'dev-build');
+      return;
+    }
     try {
       const { text, pageCount } = await extractPdfText(file.uri, (page, total) => onProgress(page / total));
       const cleaned = cleanPdfText(text);

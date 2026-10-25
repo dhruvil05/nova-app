@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, ScrollView, View } from 'react-native';
+import { FlatList, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Chip } from '@/components/Chip';
@@ -15,6 +15,7 @@ import type { FileRecord } from '@/db/filesRepo';
 import { importFiles, processPendingExtractions } from '@/services/fileStore';
 import { useFilesStore } from '@/store/files';
 import { makeStyles, useTheme } from '@/theme';
+import { showMessage } from '@/utils/dialog';
 
 type Filter = 'all' | 'pdf' | 'docx' | 'txt' | 'ai';
 
@@ -60,24 +61,25 @@ export default function FilesScreen() {
     useCallback(() => {
       load();
       // Finish any extraction interrupted by the app closing.
-      void processPendingExtractions(repo);
+      processPendingExtractions(repo).catch(() => {});
     }, [load, repo]),
   );
   useEffect(() => useFilesStore.subscribe((s, prev) => s.version !== prev.version && load()), [load]);
 
   async function startImport() {
+    if (Platform.OS === 'web') {
+      showMessage('Import', 'Importing files needs the Android app. The web preview can only show files already in Nova.');
+      return;
+    }
     setImporting(true);
     try {
       const { imported, skipped } = await importFiles(repo);
       if (skipped.length > 0) {
-        Alert.alert(
-          'Some files were skipped',
-          `Nova can read PDF, DOCX and TXT files.\n\nSkipped: ${skipped.join(', ')}`,
-        );
+        showMessage('Some files were skipped', `Nova can read PDF, DOCX and TXT files.\n\nSkipped: ${skipped.join(', ')}`);
       }
       if (imported.length > 0) setFilter('all');
     } catch {
-      Alert.alert('Import', 'Could not import those files. Please try again.');
+      showMessage('Import', 'Could not import those files. Please try again.');
     } finally {
       setImporting(false);
     }

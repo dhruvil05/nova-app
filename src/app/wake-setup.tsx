@@ -49,7 +49,11 @@ export default function WakeSetupScreen() {
   const isXiaomi = /xiaomi|redmi|poco/i.test(WakeWord?.getManufacturer() ?? '');
 
   const refresh = useCallback(() => {
-    readChecks().then(setChecks);
+    // Without the native module (Expo Go, web) there is nothing to check.
+    if (!isWakeWordAvailable) return;
+    readChecks()
+      .then(setChecks)
+      .catch(() => {});
   }, []);
 
   // Re-check whenever the user comes back from a settings screen.

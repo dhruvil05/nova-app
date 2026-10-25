@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, FlatList, Pressable, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 
 import { useChatStore } from '@/ai/chatStore';
 import { useBindChat } from '@/ai/useChat';
@@ -12,6 +12,7 @@ import { Screen } from '@/components/Screen';
 import type { Conversation } from '@/db/conversationsRepo';
 import { useConversationsRepo } from '@/db/hooks';
 import { makeStyles } from '@/theme';
+import { confirmAction } from '@/utils/dialog';
 import { formatListDate } from '@/utils/formatDate';
 
 function goBack() {
@@ -30,13 +31,16 @@ export default function ChatsScreen() {
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
-    setChats(await repo.list(100));
-    setLoaded(true);
+    try {
+      setChats(await repo.list(100));
+    } finally {
+      setLoaded(true);
+    }
   }, [repo]);
 
   useFocusEffect(
     useCallback(() => {
-      load();
+      load().catch(() => {});
     }, [load]),
   );
 
@@ -45,19 +49,18 @@ export default function ChatsScreen() {
     goBack();
   }
 
-  function confirmDelete(chat: Conversation) {
-    Alert.alert('Delete this chat?', `“${chat.title ?? 'Untitled chat'}” will be removed. Notes and files Nova made stay.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await repo.remove(chat.id);
-          if (chat.id === current) await useChatStore.getState().open(null);
-          load();
-        },
-      },
-    ]);
+  async function confirmDelete(chat: Conversation) {
+    if (busy) return;
+    const ok = await confirmAction({
+      title: 'Delete this chat?',
+      message: `“${chat.title ?? 'Untitled chat'}” will be removed. Notes and files Nova made stay.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await repo.remove(chat.id);
+    if (chat.id === current) await useChatStore.getState().open(null);
+    await load();
   }
 
   return (

@@ -14,14 +14,15 @@ import { createSettingsRepo } from '@/db/settingsRepo';
 import { createNodeDb } from '@/db/testing/nodeDb';
 import { createTracksRepo } from '@/db/tracksRepo';
 
-import { replyTextOf, useChatStore } from '../chatStore';
+import { conversationMentionsNote, replyTextOf, useChatStore } from '../chatStore';
 
 type MessageParam = Anthropic.Beta.BetaMessageParam;
 
 const mockRequests: MessageParam[][] = [];
 const mockReplies: string[] = [];
 
-jest.mock('@/services/secrets', () => ({ getApiKey: async () => 'sk-ant-test' }));
+let mockApiKey: string | null = 'sk-ant-test';
+jest.mock('@/services/secrets', () => ({ getApiKey: async () => mockApiKey }));
 jest.mock('@/services/player', () => ({}));
 jest.mock('@/services/fileStore', () => ({ saveTextFile: jest.fn() }));
 jest.mock('../llm', () => ({
@@ -61,6 +62,27 @@ async function setup() {
 describe('chatStore', () => {
   beforeEach(() => {
     mockRequests.length = 0;
+    mockApiKey = 'sk-ant-test';
+  });
+
+  it('refuses a second send while one is running (no interleaved history)', async () => {
+    await setup();
+    const first = useChatStore.getState().send('one');
+    const second = await useChatStore.getState().send('two');
+    expect(second).toEqual({ status: 'busy', replyText: '' });
+    expect(await first).toMatchObject({ status: 'done' });
+    expect(mockRequests).toHaveLength(1);
+    expect(useChatStore.getState().busy).toBe(false);
+  });
+
+  it('without an API key: asks for one and creates no empty chat', async () => {
+    const { conversations } = await setup();
+    mockApiKey = null;
+    const res = await useChatStore.getState().send('hello');
+    expect(res.status).toBe('no_key');
+    expect(useChatStore.getState().notice).toMatchObject({ tone: 'error', action: 'settings' });
+    expect(useChatStore.getState().busy).toBe(false);
+    expect(await conversations.list()).toEqual([]);
   });
 
   it('typed and spoken turns build one append-only conversation', async () => {
@@ -94,6 +116,18 @@ describe('chatStore', () => {
     expect(useChatStore.getState().messages).toEqual([]);
     await useChatStore.getState().open(id);
     expect(useChatStore.getState().messages).toEqual(before);
+  });
+
+  it('knows whether Nova read a given note in this chat', () => {
+    const history = [
+      { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'search_notes', input: { query: 'car' } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: '{"count":1,"notes":[{"id":7,"title":"Car"}]}' }] },
+      { role: 'assistant', content: [{ type: 'tool_use', id: 't2', name: 'read_file', input: { id: 9 } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't2', content: '{"id":9,"text":"..."}' }] },
+    ] as MessageParam[];
+    expect(conversationMentionsNote(history, 7)).toBe(true);
+    // id 9 is a file, not a note
+    expect(conversationMentionsNote(history, 9)).toBe(false);
   });
 
   it('extracts reply text without placeholders or thinking', () => {

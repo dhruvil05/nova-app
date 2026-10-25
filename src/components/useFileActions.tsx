@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Alert } from 'react-native';
 
 import { useFilesRepo } from '@/db/hooks';
 import type { FileRecord } from '@/db/filesRepo';
@@ -10,6 +9,7 @@ import {
   renameFile,
   shareFile,
 } from '@/services/fileStore';
+import { confirmAction, showMenu as showActionMenu, showMessage, type MenuOption } from '@/utils/dialog';
 
 import { RenameDialog } from './RenameDialog';
 
@@ -22,7 +22,7 @@ export function useFileActions(options?: { onDeleted?: (file: FileRecord) => voi
     try {
       await openInOtherApp(file);
     } catch {
-      Alert.alert('Open file', 'No app on this phone can open this file type.');
+      showMessage('Open file', 'No app on this phone can open this file type.');
     }
   }
 
@@ -30,32 +30,33 @@ export function useFileActions(options?: { onDeleted?: (file: FileRecord) => voi
     try {
       await shareFile(file);
     } catch {
-      Alert.alert('Share', 'Could not share this file.');
+      showMessage('Share', 'Could not share this file.');
     }
   }
 
-  function confirmDelete(file: FileRecord) {
-    Alert.alert('Delete this file?', `“${file.name}” and its text will be removed from Nova. This can’t be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteFile(repo, file);
-          options?.onDeleted?.(file);
-        },
-      },
-    ]);
+  async function confirmDelete(file: FileRecord) {
+    const ok = await confirmAction({
+      title: 'Delete this file?',
+      message: `“${file.name}” and its text will be removed from Nova. This can’t be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await deleteFile(repo, file);
+      options?.onDeleted?.(file);
+    } catch {
+      showMessage('Delete', 'Could not delete this file.');
+    }
   }
 
   function showMenu(file: FileRecord) {
-    const buttons: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [];
-    if (file.kind === 'pdf' || file.kind === 'docx') buttons.push({ text: 'Open in another app', onPress: () => open(file) });
-    buttons.push({ text: 'Share', onPress: () => share(file) });
-    buttons.push({ text: 'Rename', onPress: () => setRenaming(file) });
-    buttons.push({ text: 'Delete', style: 'destructive', onPress: () => confirmDelete(file) });
-    buttons.push({ text: 'Cancel', style: 'cancel' });
-    Alert.alert(file.name, undefined, buttons, { cancelable: true });
+    const items: MenuOption[] = [];
+    if (file.kind === 'pdf' || file.kind === 'docx') items.push({ label: 'Open in another app', onSelect: () => open(file) });
+    items.push({ label: 'Share', onSelect: () => share(file) });
+    items.push({ label: 'Rename', onSelect: () => setRenaming(file) });
+    items.push({ label: 'Delete', destructive: true, onSelect: () => confirmDelete(file) });
+    showActionMenu(file.name, items);
   }
 
   const dialog = renaming ? (
